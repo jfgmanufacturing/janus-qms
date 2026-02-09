@@ -170,7 +170,8 @@
       FILLING: { id: 'filling', label: 'Filling', color: 'warning' },
       INCUBATION: { id: 'incubation', label: 'Incubation Hold', color: 'neutral' },
       PENDING_REVIEW: { id: 'pending_review', label: 'Pending Review', color: 'warning' },
-      READY_TO_SHIP: { id: 'ready_to_ship', label: 'Ready to Ship', color: 'success' }
+      READY_TO_SHIP: { id: 'ready_to_ship', label: 'Ready to Ship', color: 'success' },
+      CANCELLED: { id: 'cancelled', label: 'Cancelled', color: 'error' }
     };
 
     const SIGNATURE_MEANINGS = [
@@ -607,6 +608,8 @@
       var product = getProduct(batch.productId);
       var status = getStatusInfo(batch.status);
       
+      var canCancel = batch.status !== 'cancelled' && batch.status !== 'ready_to_ship';
+      
       return '\
         <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">\
           <button class="btn btn-ghost back-btn" style="padding: 8px;">← Back</button>\
@@ -617,7 +620,20 @@
             </div>\
             <p style="color: var(--text-muted);">' + product.name + ' • ' + product.customer + '</p>\
           </div>\
+          ' + (canCancel ? '<button class="btn btn-ghost" id="cancel-batch-btn" style="color: var(--error); border: 1px solid var(--error);">Cancel Batch</button>' : '') + '\
         </div>\
+        ' + (batch.status === 'cancelled' ? '\
+        <div style="padding: 16px 20px; background: var(--error-light); border: 1px solid var(--error); border-radius: 8px; margin-bottom: 24px;">\
+          <div style="display: flex; align-items: center; gap: 12px;">\
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>\
+            <div style="flex: 1;">\
+              <div style="color: var(--error); font-weight: 600; font-size: 15px;">Batch Cancelled</div>\
+              <div style="color: #b91c1c; font-size: 13px; margin-top: 4px;"><strong>Reason:</strong> ' + (batch.cancellationReason || 'No reason provided') + '</div>\
+              <div style="color: #92400e; font-size: 12px; margin-top: 4px;">Cancelled by ' + (getUser(batch.cancelledBy) ? getUser(batch.cancelledBy).name : 'Unknown') + ' • Approved by ' + (getUser(batch.cancellationApprovedBy) ? getUser(batch.cancellationApprovedBy).name : 'Unknown') + ' • ' + formatDateTime(batch.cancelledAt) + '</div>\
+            </div>\
+          </div>\
+        </div>\
+        ' : '') + '\
         <div class="card" style="padding: 16px; margin-bottom: 24px;">\
           <div class="grid-5" style="font-size: 13px;">\
             <div>\
@@ -661,6 +677,48 @@
           </div>\
         </div>\
         ' + renderSignatureModal() + '\
+        ' + renderCancelBatchModal() + '\
+      ';
+    }
+    
+    function renderCancelBatchModal() {
+      return '\
+        <div id="cancel-batch-modal" class="modal-overlay hidden">\
+          <div class="card modal-content" style="width: 500px; max-width: 100%; padding: 32px;">\
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">\
+              <div style="width: 48px; height: 48px; background: var(--error-light); border-radius: 12px; display: flex; align-items: center; justify-content: center;">\
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>\
+              </div>\
+              <div>\
+                <h2 style="color: var(--error); font-size: 18px; font-weight: 600;">Cancel Batch</h2>\
+                <p style="color: var(--text-muted); font-size: 13px;">This action requires supervisor approval</p>\
+              </div>\
+            </div>\
+            <div style="padding: 16px; background: var(--error-light); border-radius: 8px; margin-bottom: 20px;">\
+              <div style="color: #b91c1c; font-weight: 600; margin-bottom: 4px;">Warning</div>\
+              <div style="color: #92400e; font-size: 13px;">Cancelling a batch is permanent and cannot be undone. All recorded data will be preserved for audit purposes but the batch will be marked as cancelled.</div>\
+            </div>\
+            <div class="form-group" style="margin-bottom: 16px;">\
+              <label class="form-label">Reason for Cancellation *</label>\
+              <textarea class="input" id="cancel-reason" rows="3" placeholder="Enter detailed reason for cancelling this batch..."></textarea>\
+            </div>\
+            <div class="form-group" style="margin-bottom: 16px;">\
+              <label class="form-label">Approving Supervisor *</label>\
+              <select class="input" id="cancel-supervisor">\
+                <option value="">Select supervisor...</option>\
+                ' + USERS.filter(function(u) { return u.canRelease; }).map(function(u) { return '<option value="' + u.id + '">' + u.name + ' (' + u.title + ')</option>'; }).join('') + '\
+              </select>\
+            </div>\
+            <div class="form-group" style="margin-bottom: 24px;">\
+              <label class="form-label">Supervisor Password *</label>\
+              <input class="input" type="password" id="cancel-supervisor-password" placeholder="Enter supervisor password to authorize">\
+            </div>\
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">\
+              <button class="btn btn-secondary" id="cancel-batch-cancel">Go Back</button>\
+              <button class="btn" id="cancel-batch-confirm" style="background: var(--error); color: white;">Cancel Batch</button>\
+            </div>\
+          </div>\
+        </div>\
       ';
     }
 
@@ -1850,6 +1908,70 @@
       if (backBtn) backBtn.addEventListener('click', function() {
         state.view = 'batches';
         state.selectedBatch = null;
+        render();
+      });
+      
+      // Cancel batch handlers
+      var cancelBatchBtn = document.getElementById('cancel-batch-btn');
+      if (cancelBatchBtn) cancelBatchBtn.addEventListener('click', function() {
+        document.getElementById('cancel-batch-modal').classList.remove('hidden');
+      });
+      
+      var cancelBatchCancel = document.getElementById('cancel-batch-cancel');
+      if (cancelBatchCancel) cancelBatchCancel.addEventListener('click', function() {
+        document.getElementById('cancel-batch-modal').classList.add('hidden');
+        document.getElementById('cancel-reason').value = '';
+        document.getElementById('cancel-supervisor').value = '';
+        document.getElementById('cancel-supervisor-password').value = '';
+      });
+      
+      var cancelBatchConfirm = document.getElementById('cancel-batch-confirm');
+      if (cancelBatchConfirm) cancelBatchConfirm.addEventListener('click', function() {
+        var reason = document.getElementById('cancel-reason').value.trim();
+        var supervisorId = document.getElementById('cancel-supervisor').value;
+        var password = document.getElementById('cancel-supervisor-password').value;
+        
+        if (!reason) {
+          showNotification('Please enter a reason for cancellation', 'error');
+          return;
+        }
+        if (!supervisorId) {
+          showNotification('Please select an approving supervisor', 'error');
+          return;
+        }
+        
+        var supervisor = USERS.find(function(u) { return u.id === supervisorId; });
+        if (!supervisor || !supervisor.canRelease) {
+          showNotification('Invalid supervisor selected', 'error');
+          return;
+        }
+        if (password !== supervisor.password) {
+          showNotification('Incorrect supervisor password', 'error');
+          return;
+        }
+        
+        // Cancel the batch
+        var batch = state.selectedBatch;
+        batch.status = 'cancelled';
+        batch.cancelledAt = new Date().toISOString();
+        batch.cancelledBy = state.currentUser.id;
+        batch.cancellationReason = reason;
+        batch.cancellationApprovedBy = supervisorId;
+        batch.auditLog.push({ 
+          action: 'Batch Cancellation Requested', 
+          userId: state.currentUser.id, 
+          timestamp: new Date().toISOString(),
+          details: 'Reason: ' + reason
+        });
+        batch.auditLog.push({ 
+          action: 'Batch Cancellation Approved by Supervisor: ' + supervisor.name, 
+          userId: supervisorId, 
+          timestamp: new Date().toISOString(),
+          signature: true 
+        });
+        
+        document.getElementById('cancel-batch-modal').classList.add('hidden');
+        showNotification('Batch ' + batch.id + ' has been cancelled', 'warning');
         render();
       });
       
