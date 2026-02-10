@@ -939,7 +939,7 @@
             </div>\
             <div id="supervisor-error" class="hidden" style="color: var(--error); font-size: 14px; margin-bottom: 16px; padding: 12px; background: var(--error-light); border-radius: 8px;"></div>\
             <div style="display: flex; gap: 12px;">\
-              <button class="btn btn-secondary" style="flex: 1;" id="cancel-supervisor">Cancel</button>\
+              <button class="btn btn-secondary" style="flex: 1;" id="cancel-oos-supervisor">Cancel</button>\
               <button class="btn btn-success" style="flex: 1;" id="confirm-supervisor">Approve & Release</button>\
             </div>\
           </div>\
@@ -2160,8 +2160,8 @@
       });
       
       // Supervisor Approval modal
-      var cancelSupervisor = document.getElementById('cancel-supervisor');
-      if (cancelSupervisor) cancelSupervisor.addEventListener('click', function() {
+      var cancelOosSupervisor = document.getElementById('cancel-oos-supervisor');
+      if (cancelOosSupervisor) cancelOosSupervisor.addEventListener('click', function() {
         document.getElementById('supervisor-approval-modal').classList.add('hidden');
         document.getElementById('supervisor-select').value = '';
         document.getElementById('supervisor-password').value = '';
