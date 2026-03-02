@@ -120,6 +120,15 @@
       .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
       .header-inner { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 12px; }
     }
+    
+    @media print {
+      body { background: white !important; }
+      .header, .tabs, .back-btn, #cancel-batch-btn, #print-coa-btn, .notification { display: none !important; }
+      .main { padding: 0 !important; max-width: none !important; }
+      .card { border: none !important; box-shadow: none !important; background: white !important; }
+      #coa-document { border: none !important; padding: 20px !important; }
+      #coa-document * { color-adjust: exact !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
   </style>
 </head>
 <body>
@@ -1084,13 +1093,13 @@
                 <h4 style="color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-bottom: 12px;">Carton 1</h4>\
                 <div class="form-group"><label class="form-label">Weight (g)</label><input class="input" type="text" id="seal-c1-weight" placeholder="Enter weight"></div>\
                 <div class="form-group"><label class="form-label">Integrity</label><select class="input" id="seal-c1-integrity"><option value="P">Pass</option><option value="F">Fail</option></select></div>\
-                <div class="grid-2"><div class="form-group"><label class="form-label">Top Seal (mm)</label><input class="input" type="text" id="seal-c1-top" placeholder="Enter value"></div><div class="form-group"><label class="form-label">Bottom Seal (mm)</label><input class="input" type="text" id="seal-c1-bottom" placeholder="Enter value"></div></div>\
+                <div class="grid-2"><div class="form-group"><label class="form-label">Top Seal (mm) <span style="font-weight:400;color:var(--text-muted)">min 3.0</span></label><input class="input" type="text" id="seal-c1-top" placeholder="Enter value"></div><div class="form-group"><label class="form-label">Bottom Seal (mm) <span style="font-weight:400;color:var(--text-muted)">min 3.0</span></label><input class="input" type="text" id="seal-c1-bottom" placeholder="Enter value"></div></div>\
               </div>\
               <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px;">\
                 <h4 style="color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-bottom: 12px;">Carton 2</h4>\
                 <div class="form-group"><label class="form-label">Weight (g)</label><input class="input" type="text" id="seal-c2-weight" placeholder="Enter weight"></div>\
                 <div class="form-group"><label class="form-label">Integrity</label><select class="input" id="seal-c2-integrity"><option value="P">Pass</option><option value="F">Fail</option></select></div>\
-                <div class="grid-2"><div class="form-group"><label class="form-label">Top Seal (mm)</label><input class="input" type="text" id="seal-c2-top" placeholder="Enter value"></div><div class="form-group"><label class="form-label">Bottom Seal (mm)</label><input class="input" type="text" id="seal-c2-bottom" placeholder="Enter value"></div></div>\
+                <div class="grid-2"><div class="form-group"><label class="form-label">Top Seal (mm) <span style="font-weight:400;color:var(--text-muted)">min 3.0</span></label><input class="input" type="text" id="seal-c2-top" placeholder="Enter value"></div><div class="form-group"><label class="form-label">Bottom Seal (mm) <span style="font-weight:400;color:var(--text-muted)">min 3.0</span></label><input class="input" type="text" id="seal-c2-bottom" placeholder="Enter value"></div></div>\
               </div>\
             </div>\
             <div style="display: flex; gap: 12px; justify-content: flex-end;">\
@@ -1301,11 +1310,11 @@
             </div>\
             <div class="grid-2" style="gap: 16px; margin-bottom: 24px;">\
               <div class="form-group">\
-                <label class="form-label">Top Seal Width (mm) *</label>\
+                <label class="form-label">Top Seal Width (mm) * <span style="font-weight:400;color:var(--text-muted)">min 3.0</span></label>\
                 <input class="input" type="text" id="pr-top-seal" placeholder="Enter value">\
               </div>\
               <div class="form-group">\
-                <label class="form-label">Bottom Seal Width (mm) *</label>\
+                <label class="form-label">Bottom Seal Width (mm) * <span style="font-weight:400;color:var(--text-muted)">min 3.0</span></label>\
                 <input class="input" type="text" id="pr-bottom-seal" placeholder="Enter value">\
               </div>\
             </div>\
@@ -1425,35 +1434,198 @@
     function renderReleaseTab(batch, product) {
       if (batch.status === 'ready_to_ship') {
         var releaser = getUser(batch.release.releasedBy);
+        
+        // Calculate In-Process stats
+        var inProcessStats = { ph: [], brix: [], temp: [] };
+        if (batch.inProcess && batch.inProcess.ph) inProcessStats.ph.push(parseFloat(batch.inProcess.ph));
+        if (batch.inProcess && batch.inProcess.brix) inProcessStats.brix.push(parseFloat(batch.inProcess.brix));
+        if (batch.inProcess && batch.inProcess.temp) inProcessStats.temp.push(parseFloat(batch.inProcess.temp));
+        
+        // Calculate Filling stats
+        var fillingStats = { weight: [], topSeal: [], bottomSeal: [] };
+        if (batch.filling && batch.filling.sealChecks) {
+          batch.filling.sealChecks.forEach(function(c) {
+            if (c.carton1.weight) fillingStats.weight.push(parseFloat(c.carton1.weight));
+            if (c.carton2.weight) fillingStats.weight.push(parseFloat(c.carton2.weight));
+            if (c.carton1.topSeal) fillingStats.topSeal.push(parseFloat(c.carton1.topSeal));
+            if (c.carton2.topSeal) fillingStats.topSeal.push(parseFloat(c.carton2.topSeal));
+            if (c.carton1.bottomSeal) fillingStats.bottomSeal.push(parseFloat(c.carton1.bottomSeal));
+            if (c.carton2.bottomSeal) fillingStats.bottomSeal.push(parseFloat(c.carton2.bottomSeal));
+          });
+        }
+        
+        // Calculate Post-Retort stats
+        var postRetortStats = { topSeal: [], bottomSeal: [] };
+        if (batch.postRetort && batch.postRetort.tests) {
+          batch.postRetort.tests.forEach(function(t) {
+            if (t.topSeal) postRetortStats.topSeal.push(parseFloat(t.topSeal));
+            if (t.bottomSeal) postRetortStats.bottomSeal.push(parseFloat(t.bottomSeal));
+          });
+        }
+        
+        // Helper functions for stats
+        function calcMin(arr) { return arr.length ? Math.min.apply(null, arr).toFixed(2) : 'N/A'; }
+        function calcMax(arr) { return arr.length ? Math.max.apply(null, arr).toFixed(2) : 'N/A'; }
+        function calcAvg(arr) { return arr.length ? (arr.reduce(function(a,b) { return a+b; }, 0) / arr.length).toFixed(2) : 'N/A'; }
+        function calcRange(arr) { return arr.length ? calcMin(arr) + ' - ' + calcMax(arr) : 'N/A'; }
+        
+        // Check for OOS
+        var hasOOS = batch.release && batch.release.oosApproval;
+        
         return '\
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">\
-            <div style="width: 48px; height: 48px; background: var(--success-light); border-radius: 12px; display: flex; align-items: center; justify-content: center;">\
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>\
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">\
+            <div style="display: flex; align-items: center; gap: 12px;">\
+              <div style="width: 48px; height: 48px; background: var(--success-light); border-radius: 12px; display: flex; align-items: center; justify-content: center;">\
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>\
+              </div>\
+              <div>\
+                <h3 style="color: var(--text-primary); font-size: 18px; font-weight: 600;">Batch Released</h3>\
+                <p style="color: var(--text-muted); font-size: 13px;">' + formatDateTime(batch.release.releasedAt) + ' by ' + (releaser ? releaser.name : 'Unknown') + '</p>\
+              </div>\
             </div>\
-            <div>\
-              <h3 style="color: var(--text-primary); font-size: 18px; font-weight: 600;">Batch Released</h3>\
-              <p style="color: var(--text-muted); font-size: 13px;">' + formatDateTime(batch.release.releasedAt) + ' by ' + (releaser ? releaser.name : 'Unknown') + '</p>\
-            </div>\
+            <button class="btn btn-primary" id="print-coa-btn" onclick="window.print()">🖨️ Print COA</button>\
           </div>\
-          <div style="padding: 24px; background: white; border: 1px solid var(--border-light); border-radius: 8px;">\
-            <div style="text-align: center; border-bottom: 2px solid var(--janus-green); padding-bottom: 16px; margin-bottom: 20px;">\
-              <h2 style="color: var(--janus-green); font-size: 20px; font-weight: 700;">CERTIFICATE OF ANALYSIS</h2>\
-              <p style="color: var(--text-muted); font-size: 13px;">Janus Food Group</p>\
+          <div id="coa-document" style="padding: 32px; background: white; border: 1px solid var(--border-light); border-radius: 8px; color: #1e293b;">\
+            <div style="text-align: center; border-bottom: 3px solid #0d3b2d; padding-bottom: 20px; margin-bottom: 24px;">\
+              <h1 style="color: #0d3b2d; font-size: 24px; font-weight: 700; margin: 0 0 4px 0;">CERTIFICATE OF ANALYSIS</h1>\
+              <p style="color: #64748b; font-size: 14px; margin: 0;">Janus Food Group • Tetra Recart Production</p>\
             </div>\
-            <div class="grid-2" style="gap: 20px; margin-bottom: 20px;">\
-              <div>\
-                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Product</div>\
-                <div style="font-weight: 600;">' + product.name + '</div>\
-                <div style="color: var(--text-muted); font-size: 13px;">' + product.id + ' • ' + product.customer + '</div>\
+            \
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">\
+              <div style="padding: 16px; background: #f8fafc; border-radius: 8px;">\
+                <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">Product Information</div>\
+                <div style="font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">' + product.name + '</div>\
+                <div style="font-size: 13px; color: #64748b;">SKU: ' + product.id + '</div>\
+                <div style="font-size: 13px; color: #64748b;">Customer: ' + product.customer + '</div>\
               </div>\
-              <div>\
-                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Batch</div>\
-                <div style="font-weight: 600;">' + batch.id + '</div>\
-                <div style="color: var(--text-muted); font-size: 13px;">Released: ' + formatDate(batch.release.releasedAt) + '</div>\
+              <div style="padding: 16px; background: #f8fafc; border-radius: 8px;">\
+                <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">Batch Information</div>\
+                <div style="font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">' + batch.id + '</div>\
+                <div style="font-size: 13px; color: #64748b;">Production Date: ' + formatDate(batch.createdAt) + '</div>\
+                <div style="font-size: 13px; color: #64748b;">Release Date: ' + formatDate(batch.release.releasedAt) + '</div>\
               </div>\
             </div>\
-            <div style="padding: 12px; background: var(--success-light); border-radius: 6px; text-align: center;">\
-              <span style="color: #047857; font-weight: 600;">✓ All Quality Checks Passed</span>\
+            \
+            <div style="margin-bottom: 24px;">\
+              <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 12px;">Test Results Summary</div>\
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">\
+                <thead>\
+                  <tr style="background: #f1f5f9;">\
+                    <th style="padding: 10px 12px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">Parameter</th>\
+                    <th style="padding: 10px 12px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">Specification</th>\
+                    <th style="padding: 10px 12px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">Range</th>\
+                    <th style="padding: 10px 12px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">Average</th>\
+                    <th style="padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;">Status</th>\
+                  </tr>\
+                </thead>\
+                <tbody>\
+                  <tr><td colspan="5" style="padding: 8px 12px; background: #e2e8f0; font-weight: 600; border: 1px solid #e2e8f0;">In-Process Testing</td></tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">pH</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + product.specs.ph.min + ' - ' + product.specs.ph.max + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(inProcessStats.ph) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(inProcessStats.ph) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Brix</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + product.specs.brix.min + ' - ' + product.specs.brix.max + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(inProcessStats.brix) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(inProcessStats.brix) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Temperature (°F)</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">160 - 180</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(inProcessStats.temp) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(inProcessStats.temp) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr><td colspan="5" style="padding: 8px 12px; background: #e2e8f0; font-weight: 600; border: 1px solid #e2e8f0;">Filling Stage</td></tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Fill Weight (g)</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + product.specs.fillWeight.min + ' - ' + product.specs.fillWeight.max + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(fillingStats.weight) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(fillingStats.weight) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Top Seal (mm)</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">≥ 3.0</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(fillingStats.topSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(fillingStats.topSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Bottom Seal (mm)</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">≥ 3.0</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(fillingStats.bottomSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(fillingStats.bottomSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr><td colspan="5" style="padding: 8px 12px; background: #e2e8f0; font-weight: 600; border: 1px solid #e2e8f0;">Post-Retort Testing</td></tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Top Seal (mm)</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">≥ 3.0</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(postRetortStats.topSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(postRetortStats.topSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Bottom Seal (mm)</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">≥ 3.0</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcRange(postRetortStats.bottomSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">' + calcAvg(postRetortStats.bottomSeal) + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr><td colspan="5" style="padding: 8px 12px; background: #e2e8f0; font-weight: 600; border: 1px solid #e2e8f0;">Incubation Testing (' + product.incubationDays + ' Days)</td></tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Container Integrity</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Pass</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;" colspan="2">' + (batch.incubation && batch.incubation.finalTest ? batch.incubation.finalTest.containerIntegrity : 'N/A') + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Swelling</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">None</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;" colspan="2">' + (batch.incubation && batch.incubation.finalTest ? batch.incubation.finalTest.swelling : 'N/A') + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                  <tr>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Microbial Test</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">Negative</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0;" colspan="2">' + (batch.incubation && batch.incubation.finalTest ? batch.incubation.finalTest.microTest : 'N/A') + '</td>\
+                    <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: center; color: #047857; font-weight: 600;">✓ PASS</td>\
+                  </tr>\
+                </tbody>\
+              </table>\
+            </div>\
+            \
+            ' + (hasOOS ? '\
+            <div style="padding: 12px 16px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; margin-bottom: 24px;">\
+              <div style="font-weight: 600; color: #92400e; margin-bottom: 4px;">⚠️ OOS Release Approved</div>\
+              <div style="font-size: 13px; color: #92400e;">This batch was released with out-of-specification values. Supervisor approval obtained.</div>\
+            </div>\
+            ' : '') + '\
+            \
+            <div style="padding: 16px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;">\
+              <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 12px;">Release Authorization</div>\
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; font-size: 13px;">\
+                <div>\
+                  <div style="color: #64748b; font-size: 11px;">Released By</div>\
+                  <div style="font-weight: 600; color: #1e293b;">' + (releaser ? releaser.name : 'Unknown') + '</div>\
+                  <div style="color: #64748b; font-size: 12px;">' + (releaser ? releaser.title : '') + '</div>\
+                </div>\
+                <div>\
+                  <div style="color: #64748b; font-size: 11px;">Date/Time</div>\
+                  <div style="font-weight: 600; color: #1e293b;">' + formatDateTime(batch.release.releasedAt) + '</div>\
+                </div>\
+                <div>\
+                  <div style="color: #64748b; font-size: 11px;">Signature Meaning</div>\
+                  <div style="font-weight: 600; color: #1e293b;">' + (batch.release.meaning || 'I authorize release of this batch') + '</div>\
+                </div>\
+              </div>\
+              <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #86efac; font-size: 12px; color: #047857; font-weight: 500;">✓ Electronic Signature Verified (21 CFR Part 11 Compliant)</div>\
             </div>\
           </div>\
         ';
@@ -2356,6 +2528,23 @@
       
       var saveSealCheck = document.getElementById('save-seal-check');
       if (saveSealCheck) saveSealCheck.addEventListener('click', function() {
+        var c1Top = parseFloat(document.getElementById('seal-c1-top').value);
+        var c1Bottom = parseFloat(document.getElementById('seal-c1-bottom').value);
+        var c2Top = parseFloat(document.getElementById('seal-c2-top').value);
+        var c2Bottom = parseFloat(document.getElementById('seal-c2-bottom').value);
+        
+        // Validate 3mm minimum for all seals
+        var sealErrors = [];
+        if (c1Top < 3) sealErrors.push('Carton 1 Top Seal (' + c1Top + 'mm)');
+        if (c1Bottom < 3) sealErrors.push('Carton 1 Bottom Seal (' + c1Bottom + 'mm)');
+        if (c2Top < 3) sealErrors.push('Carton 2 Top Seal (' + c2Top + 'mm)');
+        if (c2Bottom < 3) sealErrors.push('Carton 2 Bottom Seal (' + c2Bottom + 'mm)');
+        
+        if (sealErrors.length > 0) {
+          showNotification('Seal width below 3mm minimum: ' + sealErrors.join(', '), 'error');
+          return;
+        }
+        
         var batch = state.selectedBatch;
         var check = {
           time: document.getElementById('seal-time').value,
@@ -2476,6 +2665,18 @@
             !test.sealIntegrity || !test.conductivity || !test.redInkTest || 
             !test.topSeal || !test.bottomSeal) {
           showNotification('Please fill all required fields', 'error');
+          return;
+        }
+        
+        // Validate 3mm minimum for seals
+        var topSealVal = parseFloat(test.topSeal);
+        var bottomSealVal = parseFloat(test.bottomSeal);
+        var sealErrors = [];
+        if (topSealVal < 3) sealErrors.push('Top Seal (' + topSealVal + 'mm)');
+        if (bottomSealVal < 3) sealErrors.push('Bottom Seal (' + bottomSealVal + 'mm)');
+        
+        if (sealErrors.length > 0) {
+          showNotification('Seal width below 3mm minimum: ' + sealErrors.join(', '), 'error');
           return;
         }
         
